@@ -1,0 +1,12 @@
+Uuid: 22d5448831184ac3a94d0a112d744069
+ExtensionType: 1
+Name: JavaScript Security
+RepoName: javascript-security
+ScreenVersion: 1.1
+SerialVersion: 1
+MinPlatformVersion: 0
+ProOnly: True
+Author: Peter Hefley
+ShortDescription: Performs checks for cross-domain scripting against the DOM, subresource integrity checks, and evaluates JavaScript resources against threat intelligence data.
+EntryPoint: javascript-security-extension-all-1.1.jar
+BuildCommand: gradle fatJar
