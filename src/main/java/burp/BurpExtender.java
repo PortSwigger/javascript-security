@@ -77,6 +77,10 @@ public class BurpExtender implements IBurpExtender, IScannerCheck, ITab
         // register ourselves as a custom scanner check
         callbacks.registerScannerCheck(this);
 
+        // Setup the driverservicemanager
+        serviceManager.setCallbacks(callbacks);
+        serviceManager.startDriverService();
+
         // Create the config tab
         SwingUtilities.invokeLater(new Runnable() {
             @Override
@@ -85,6 +89,7 @@ public class BurpExtender implements IBurpExtender, IScannerCheck, ITab
                 panel = new PluginConfigurationTab();
                 panel.setIocChecker(iocChecker);
                 panel.setDriverServiceManager(serviceManager);
+                panel.setCallbacks(callbacks);
                 panel.render();
                 callbacks.customizeUiComponent(panel);
 
@@ -146,9 +151,9 @@ public class BurpExtender implements IBurpExtender, IScannerCheck, ITab
     // Check for Cross-Domain Script Includes (DOM)
     public List<IScanIssue> checkForCrossDomainScriptIncludesDom(IHttpRequestResponse baseRequestResponse, ScriptFinder finder){
         List<IScanIssue> issues = new ArrayList<>();
-        if (finder.getCrossDomainDomScripts().size() > 0){
+        if (finder.getCrossDomainDomOnlyScripts().size() > 0){
             String scriptString = "";
-            for (String scriptUrl : finder.getCrossDomainDomScripts()){
+            for (String scriptUrl : finder.getCrossDomainDomOnlyScripts()){
                 scriptString += "<li>" + scriptUrl + "</li>";
             }
             issues.add(
@@ -322,6 +327,8 @@ public class BurpExtender implements IBurpExtender, IScannerCheck, ITab
         // Get the response contents for the passive scan
         String response = helpers.bytesToString(baseRequestResponse.getResponse());
         String html = "";
+        // Set the headers for the request
+        scriptFinder.setRequestHeaders(helpers.analyzeRequest(baseRequestResponse).getHeaders());
         
         log(currentScanNumber, url, "starting passive checks.");
 

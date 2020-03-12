@@ -29,6 +29,8 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
 
+import org.openqa.selenium.Cookie;
+
 import org.openqa.selenium.chrome.ChromeDriverService;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import java.io.File;
@@ -52,6 +54,7 @@ import java.net.URL;
 import java.net.URI;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 
 public class ScriptFinder{
@@ -59,6 +62,7 @@ public class ScriptFinder{
     private Integer PAGE_WAIT_TIMEOUT = 10;
     private String url="NONE";
     private String html="NONE";
+    private List<String> requestHeaders = new ArrayList<>();
     private List<String> domScripts = new ArrayList<>();
     private List<String> htmlScripts = new ArrayList<>();
     // Something to store a parsed URL
@@ -138,6 +142,15 @@ public class ScriptFinder{
         return PAGE_WAIT_TIMEOUT;
     }
 
+    /**
+     * Set the request headers
+     * @param headers - a list of request headers
+     */
+    public void setRequestHeaders(List<String> headers){
+        requestHeaders = new ArrayList<>();
+        requestHeaders.addAll(headers);
+    }
+
 
     /**
      * There is no reason that this should ever be called within burp. It is just here for tests.
@@ -173,6 +186,7 @@ public class ScriptFinder{
             HashMap<String, Object> prefs = new HashMap<String, Object>(); 
             prefs.put("profile.managed_default_content_settings.images", 2);
             options.setExperimentalOption("prefs", prefs); 
+
             driver = new RemoteWebDriver(serviceManager.getService().getUrl(), options);
             driver.manage().timeouts().implicitlyWait(PAGE_WAIT_TIMEOUT, TimeUnit.SECONDS); // Wait for the page to be completely loaded. Or reasonably loaded.
         }
@@ -182,12 +196,51 @@ public class ScriptFinder{
     }
 
     /**
+     * sets the driver's cookies up based on the requestHeaders set
+     */
+    private void setDriverCookies(){
+        // You can't set cookies until you have the domain set in the DOM, this is a fix for that
+        try {
+            driver.get(url);
+        }
+        catch (TimeoutException e){
+            System.err.println("[" + url + "][-] - timeout when connecting.");
+        }
+
+        // Set the driver's cookies based on the headers, if there are any
+        if (requestHeaders != null){
+            for (String header: requestHeaders){
+                if (header.startsWith("Cookie: ")){
+                    // This is a cookie header, split it up
+                    String cookieString = header.substring(8,header.length());
+                    for (String kvPair : cookieString.split(";")){
+                        String key = kvPair.split("=")[0].trim();
+                        String value = kvPair.split("=")[1].trim();
+                        Cookie cookieObj = new Cookie(key, value);
+                        try {
+                            driver.manage().addCookie(cookieObj);
+                        }
+                        catch (org.openqa.selenium.UnableToSetCookieException d){
+                            System.err.println("[JS-SRI][-] Could not set cookie for key " + key + " and value " + value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
      * Load the DOM and check for any referenced scripts
      * Starts and stops the selenium instance
      */
     public void checkForDomScripts(){
         startDriver();
-        try{
+
+        setDriverCookies();
+
+        // Now actually get the page
+        try {
             driver.get(url);
         }
         catch (TimeoutException e){
@@ -323,11 +376,19 @@ public class ScriptFinder{
     }
 
     /**
-     * Get a list of the cross-domain scripts not referenced by the page's  DO
-     * @return a List object of Strings which are URLs to cross-domain JS resources not referenced by the page's DOM
+     * Get a list of the cross-domain scripts referenced by the page's  DOM
+     * @return a List object of Strings which are URLs to cross-domain JS resources referenced by the page's DOM
      */
     public List<String> getCrossDomainDomScripts(){
         return selectCrossDomainScripts(domScripts);
+    }
+
+    /**
+     * Get a list of the cross-domain scripts only referenced by the page's  DOM
+     * @return a List object of Strings which are URLs to cross-domain JS resources only referenced by the page's DOM
+     */
+    public List<String> getCrossDomainDomOnlyScripts(){
+        return selectCrossDomainScripts(getDomOnlyScripts());
     }
 
     /**
